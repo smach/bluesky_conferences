@@ -9,7 +9,7 @@
 # parent_directory/app.R
 
 # Define the main Shiny app function, accepting config as an argument
-shiny_conference_app <- function(config) {
+shiny_conference_app <- function(conference_name, conference_name_no_spaces, file_with_data) {
   
   library(shiny)
   library(DT)
@@ -18,7 +18,7 @@ shiny_conference_app <- function(config) {
   library(data.table)
   library(memoise)
   
-  my_theme <- bs_theme( # Theme definition remains the same ...
+  my_theme <- bslib::bs_theme( # Theme definition remains the same ...
     version = 5,
     preset = NULL,
     bg = "#f8f9fa",
@@ -28,7 +28,7 @@ shiny_conference_app <- function(config) {
     heading_font = font_google("Montserrat"),
     font_scale = 0.9
   ) |>
-    bs_add_rules(
+    bslib::bs_add_rules(
       "
       /* Card styling */
       .card {
@@ -162,9 +162,9 @@ shiny_conference_app <- function(config) {
   
   
   # --- UI ---
-  ui <- page_sidebar(
+  ui <- bslib::page_sidebar(
     theme = my_theme,
-    window_title = paste(config$conference_name, "Bluesky posts"), # Use config$conference_name
+    window_title = paste(conference_name, "Bluesky posts"), 
     title = div(
       style = "display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; gap: 0.5rem;",
       div(
@@ -309,23 +309,23 @@ shiny_conference_app <- function(config) {
   server <- function(input, output, session) {
     
     # --- Memoized Data Loading ---
-    load_data <- memoise(function(file_path) {
+    load_data <- memoise::memoise(function(file_path) {
       message("Loading data from disk...")  # For debugging
       readRDS(file_path)
     })
     
-    table_posts <- reactiveFileReader(
+    table_posts <- shiny::reactiveFileReader(
       intervalMillis = 900000,
       session = session,
-      filePath = config$file_with_data, # Use config$file_with_data
+      filePath = file_with_data, 
       readFunc = load_data
     )
     
     # --- Author Checkbox Updates ---
-    last_authors <- reactiveVal(NULL)
+    last_authors <- shiny::reactiveVal(NULL)
     
-    observe({
-      df <- data.table(table_posts())
+    shiny::observe({
+      df <- data.table::data.table(table_posts())
       req(nrow(df) > 0)
       
       if (!is.null(input$date_range[1])) {
@@ -337,34 +337,34 @@ shiny_conference_app <- function(config) {
       if (!identical(authors, last_authors())) {
         last_authors(authors)
         if (is.null(input$selected_authors)) {
-          updateCheckboxGroupInput(session, "selected_authors",
+          shiny::updateCheckboxGroupInput(session, "selected_authors",
                                    choices = authors,
                                    selected = authors
           )
         } else {
-          updateCheckboxGroupInput(session, "selected_authors",
+          shiny::updateCheckboxGroupInput(session, "selected_authors",
                                    choices = authors
           )
         }
       }
     })
     
-    observeEvent(input$select_all, {
+    shiny::observeEvent(input$select_all, {
       df <- data.table(table_posts())
       authors <- df[, sort(unique(Author))]
-      updateCheckboxGroupInput(session, "selected_authors",
+      shiny::updateCheckboxGroupInput(session, "selected_authors",
                                selected = authors
       )
     })
     
-    observeEvent(input$clear_all, {
+    shiny::observeEvent(input$clear_all, {
       updateCheckboxGroupInput(session, "selected_authors",
                                selected = character(0)
       )
     })
     
     # --- Date Range Update ---
-    observe({
+    shiny::observe({
       df <- data.table(table_posts())
       updateDateRangeInput(session, "date_range",
                            start = min(df$CreatedAt),
@@ -373,14 +373,14 @@ shiny_conference_app <- function(config) {
     })
     
     # --- Dynamic Title ---
-    output$dynamic_title <- renderUI({
+    output$dynamic_title <- shiny::renderUI({
       start_date <- format(input$date_range[1], "%b. %d")
       end_date <- format(input$date_range[2], "%b. %d")
-      sprintf(paste(config$conference_name, "Posts on Bluesky from %s to %s"), start_date, end_date) # Use config$conference_name
+      sprintf(paste(conference_name, "Posts on Bluesky from %s to %s"), start_date, end_date) 
     })
     
     # --- Filtered Data (with isolation and req) ---
-    filtered_data <- reactive({
+    filtered_data <- shiny::reactive({
       req(table_posts())
       df <- data.table(isolate(table_posts()))
       
@@ -462,7 +462,7 @@ shiny_conference_app <- function(config) {
     # --- Download Handler ---
     output$download_data <- downloadHandler(
       filename = function() {
-        paste0(config$conference_name_no_spaces, "_posts_", format(Sys.Date(), "%Y%m%d"), ".csv") # Use config$conference_name_no_spaces
+        paste0(conference_name_no_spaces, "_posts_", format(Sys.Date(), "%Y%m%d"), ".csv") 
       },
       content = function(file) {
         df <- filtered_data()
@@ -473,8 +473,8 @@ shiny_conference_app <- function(config) {
     )
     
     # --- FAQ Modal ---
-    observeEvent(input$show_faq, {
-      showModal(modalDialog(
+    shiny::observeEvent(input$show_faq, {
+      shiny::showModal(modalDialog(
         title = "Frequently Asked Questions",
         div(
           h4("About this App", class = "faq-question"),
@@ -497,13 +497,13 @@ shiny_conference_app <- function(config) {
     
     
     # --- Total Likes (using renderText) ---
-    output$total_likes <- renderText({
+    output$total_likes <- shiny::renderText({
       sum(filtered_data()$Likes, na.rm = TRUE)
     })
     
     # --- Last Updated ---
-    output$last_updated <- renderText({
-      file_info <- file.info(config$file_with_data) # Use config$file_with_data
+    output$last_updated <- shiny::renderText({
+      file_info <- file.info(file_with_data) 
       paste("Last updated", format(file_info$mtime, "%b. %d, %Y %H:%M UTC"))
     })
   }
