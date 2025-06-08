@@ -14,6 +14,7 @@ shiny_conference_app <- function(conference_name, conference_name_no_spaces, fil
   library(shiny)
   library(DT)
   library(bslib)
+  library(bsicons)
   library(dplyr)
   library(data.table)
   library(memoise)
@@ -164,6 +165,7 @@ shiny_conference_app <- function(conference_name, conference_name_no_spaces, fil
   # --- UI ---
   ui <- bslib::page_sidebar(
     theme = my_theme,
+    tags$head(tags$link(rel="shortcut icon", href="https://apps.machlis.com/shiny/images/bsky.ico")),
     window_title = paste(conference_name, "Bluesky posts"), 
     title = div(
       style = "display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; gap: 0.5rem;",
@@ -259,12 +261,7 @@ shiny_conference_app <- function(conference_name, conference_name_no_spaces, fil
                      class = "btn-primary w-100"
       ),
       
-      br(),
-      br(),
-      tags$small(
-        style = "color: #666; font-style: italic;",
-        "Use the filters above to narrow down the posts shown in the table."
-      )
+      br()
     ),
     
     div(class = "main-container",

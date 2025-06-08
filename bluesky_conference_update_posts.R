@@ -8,6 +8,8 @@ library(purrr)
 library(dplyr)
 library(data.table)
 
+readRenviron(file.path(Sys.getenv("HOME"), ".Renviron"))
+
 #Set token if you use multiple accounts, use your token name
 Sys.setenv(BSKY_TOKEN = "token.rds")
 
@@ -81,7 +83,10 @@ get_one_hashtag <- function(the_hashtag, the_limit = 250) {
 all_recent_posts <- purrr::map_dfr(conference_hashtags, ~ get_one_hashtag(the_hashtag = .x, the_limit = num_posts))
 
 deduped_recent_posts <- all_recent_posts |>
-  dplyr::distinct(URI, .keep_all = TRUE)
+  dplyr::distinct(URI, .keep_all = TRUE) |>
+  dplyr::filter(!(By %in% accounts_to_remove))
+
+
 
 # Check with previous retrieved deduped posts and use newest versions
 
