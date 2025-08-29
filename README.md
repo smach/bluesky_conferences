@@ -6,7 +6,9 @@ This repo has files to download and wrangle Bluesky posts with one or more hasht
 
 `sample_update_conf_posts.R` shows a sample configuration file for retrieving and wrangling posts by hashtag. Change values as appropriate for your conference, directory structure, and file names. It sources `bluesky_conference_update_posts.R`, with most of the R code for this task.
 
-This project uses the atrrr package to interface with Bluesky in R. **You need to authenticate with a Bluesky app user name and password in atrrr -- which is not the same as your Bluesky account user name and password**. Please see [https://jbgruber.github.io/atrrr/articles/Basic_Usage.html#authentication](https://jbgruber.github.io/atrrr/articles/Basic_Usage.html#authentication) if you need help with this.
+The configuration variables include `accts_to_remove_manually` for anyone you know wouldn't want to be included, as well as `accts_to_remove_regexp` if you know you want to block a domain such as the bridge from Mastodon to Bluesky. The update code automatically checks for users who have `#nobot` or `#nobots` in their profiles, as well as a label for requiring Bluesky log-in to view their posts and should exclude all such users.
+
+This project uses the atrrr package to interface with Bluesky in R. **You need to authenticate with a Bluesky app user name and password in atrrr -- which is not the same as your Bluesky account user name and password -- and store an authentication token**. Please see [https://jbgruber.github.io/atrrr/articles/Basic_Usage.html#authentication](https://jbgruber.github.io/atrrr/articles/Basic_Usage.html#authentication) if you need help with this.
 
 It also uses tidyr, purrr, dplyr, and data.table, which will need to be installed locally.
 

@@ -79,35 +79,114 @@ get_one_hashtag <- function(the_hashtag, the_limit = 250) {
   
 }  
 
+
 # Get deduped posts for the conference hashtags
 all_recent_posts <- purrr::map_dfr(conference_hashtags, ~ get_one_hashtag(the_hashtag = .x, the_limit = num_posts))
 
+
+### Check to make sure authors don't have #nobot #nobots or require sign-in to view posts
+
+all_posting_accounts <- sort(unique(all_recent_posts$By))
+
+if(file.exists(file.path(working_directory, "existing_posting_accounts.Rds"))) {
+  existing_posting_accounts <- readRDS(file.path(working_directory, "existing_posting_accounts.Rds"))
+} else {
+  existing_posting_accounts <- NULL
+  saveRDS(all_posting_accounts, file.path(working_directory, "existing_posting_accounts.Rds"))
+}
+
+
+check_account <- function(acct) {
+  user_info <- tryCatch({
+    atrrr::get_user_info(acct)
+  }, error = function(e) {
+    NULL
+  })
+  
+  bio <- tolower(user_info$actor_description)
+  no_bots <- grepl("#nobots?\\b", bio)
+  
+  bsky_labels <- user_info$labels
+  
+  if(length(bsky_labels[[1]]) > 0  ) {
+    vals <- tryCatch(
+      unlist(purrr::map(bsky_labels, ~ purrr::pluck(.x, "val", .default = NA_character_))),
+      error = function(e) character()
+    )
+    
+    protected <- any(!is.na(vals) & vals %in% c("!no-unauthenticated", "no-unauthenticated"))
+  } else {
+    protected <- FALSE
+  }
+  
+  
+  results <- dplyr::tibble(Account = acct, NoBots = no_bots, Protected = protected)
+  return(results)
+  
+}
+
+new_posting_accounts <- setdiff(all_posting_accounts, existing_posting_accounts)
+
+if(file.exists(file.path(working_directory, "test_df.Rds"))) {
+  test_df <- readRDS(file.path(working_directory, "test_df.Rds"))
+} else {
+  test_df <- NULL
+} 
+
+
+if(length(new_posting_accounts) > 0) {
+  new_test_df <- purrr::map(new_posting_accounts, check_account) |>
+    bind_rows()
+  test_df <- bind_rows(new_test_df, test_df)
+  saveRDS(test_df, file.path(working_directory, "test_df.Rds"))
+}
+
+accounts_to_remove <- test_df |>
+  filter(NoBots | Protected) |>
+  unique() |>
+  pluck("Account")
+
+accounts_to_remove <- c(accts_to_remove_manually, accounts_to_remove)
+
+### End check
+
+
+
+
 deduped_recent_posts <- all_recent_posts |>
   dplyr::distinct(URI, .keep_all = TRUE) |>
-  dplyr::filter(!(By %in% accounts_to_remove))
+  dplyr::filter(!(By %in% accounts_to_remove)) |>
+  dplyr::filter(!stringr::str_detect(By, accts_to_remove_regexp))
 
 
 
 # Check with previous retrieved deduped posts and use newest versions
 
 # If file exists
-if (file.exists(stored_post_file)) {
-  previous_retrieved_posts <- readRDS(stored_post_file)
+if (file.exists(file.path(working_directory, stored_post_file)) ) {
+  previous_retrieved_posts <- readRDS(file.path(working_directory, stored_post_file) )
   combined_recent_posts <- rbind(previous_retrieved_posts, deduped_recent_posts) |>
     dplyr::group_by(URI) |>
     dplyr::arrange(desc(TimePulled)) |>
     dplyr::slice(1) |>
     dplyr::ungroup() |>
     dplyr::arrange(desc(CreatedAt))
-  saveRDS(combined_recent_posts, stored_post_file)
+  saveRDS(combined_recent_posts, file.path(working_directory, stored_post_file) )
   
 } else {
-  saveRDS(deduped_recent_posts, stored_post_file)
+  saveRDS(deduped_recent_posts, file.path(working_directory, stored_post_file) )
 }
 
 
+
+
+
+
+
+
+
 # Create a table of the deduped posts with the DT R package.
-table_posts <- readRDS(stored_post_file) |>
+table_posts <- readRDS(file.path(working_directory, stored_post_file) ) |>
   dplyr::filter(as.Date(CreatedAt) >= min_date) |>
   dplyr::mutate(
     HasExternalURLs = if_else(ExternalURLs == "NA", FALSE, TRUE),
@@ -126,17 +205,11 @@ table_posts$Tags <- sapply(table_posts$AllTags, function(tag_list) {
   paste(links, collapse=", ")
 })
 
-# table_posts <- table_posts |>
-#  select(-AllTags)
-
 data.table::setDT(table_posts)
 table_posts[, CreatedDate := as.Date(table_posts$CreatedAt)]
 setindex(table_posts, CreatedDate)
 setindex(table_posts, Author)
-saveRDS(table_posts, conference_file_path)
-
-
-
+saveRDS(table_posts, file.path(working_directory, conference_file_path) )
 
 
 
