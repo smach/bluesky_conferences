@@ -1,6 +1,6 @@
 # Project to create a Shiny app displaying up-to-date posts with conference hashtags
 
-This repo has files to download and wrangle Bluesky posts with one or more hashtag(s), and then display them in a searchable Shiny app.
+This repo has files to download and wrangle Bluesky posts with one or more hashtag(s), and then display them in a searchable Shiny app. This is very similar to the code that's running my [posit::conf(2025) Posts on Bluesky Shiny app](https://apps.machlis.com/shiny/positconf2025/), just in case anyone's interested.
 
 ## Configuration files you need to update with your project's info
 
