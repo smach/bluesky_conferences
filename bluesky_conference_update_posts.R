@@ -31,11 +31,9 @@ atrrr::auth(user = Sys.getenv("BLUESKY_APP_USER"),
 #' @export
 
 get_one_hashtag <- function(the_hashtag, the_limit = 250) {
-  atrrr::auth(user = Sys.getenv("BLUESKY_APP_USER"),
-              password = Sys.getenv("BLUESKY_APP_PASS"),
-              overwrite = TRUE)
-  
-  
+  # No auth() here: the one call at the top of this script is enough, and
+  # Bluesky rate-limits log-ins (createSession) per account
+
   the_hashtag2 <- gsub("#", "", the_hashtag, fixed = TRUE)
   mydata <- atrrr::search_post(q = the_hashtag, limit = the_limit)
   
@@ -88,13 +86,6 @@ all_recent_posts <- purrr::map_dfr(conference_hashtags, ~ get_one_hashtag(the_ha
 
 all_posting_accounts <- sort(unique(all_recent_posts$By))
 
-if(file.exists(file.path(working_directory, "existing_posting_accounts.Rds"))) {
-  existing_posting_accounts <- readRDS(file.path(working_directory, "existing_posting_accounts.Rds"))
-} else {
-  existing_posting_accounts <- NULL
-  saveRDS(all_posting_accounts, file.path(working_directory, "existing_posting_accounts.Rds"))
-}
-
 
 check_account <- function(acct) {
   user_info <- tryCatch({
@@ -102,42 +93,45 @@ check_account <- function(acct) {
   }, error = function(e) {
     NULL
   })
-  
+
   bio <- tolower(user_info$actor_description)
   no_bots <- grepl("#nobots?\\b", bio)
-  
+
   bsky_labels <- user_info$labels
-  
+
   if(length(bsky_labels[[1]]) > 0  ) {
-    vals <- tryCatch(
-      unlist(purrr::map(bsky_labels, ~ purrr::pluck(.x, "val", .default = NA_character_))),
-      error = function(e) character()
-    )
-    
+    # atrrr returns a single label as one record but 2+ labels as a list of
+    # records, so flatten them all and look for the label value anywhere
+    vals <- unlist(bsky_labels)
+
     protected <- any(!is.na(vals) & vals %in% c("!no-unauthenticated", "no-unauthenticated"))
   } else {
     protected <- FALSE
   }
-  
-  
+
+
   results <- dplyr::tibble(Account = acct, NoBots = no_bots, Protected = protected)
   return(results)
-  
-}
 
-new_posting_accounts <- setdiff(all_posting_accounts, existing_posting_accounts)
+}
 
 if(file.exists(file.path(working_directory, "test_df.Rds"))) {
   test_df <- readRDS(file.path(working_directory, "test_df.Rds"))
 } else {
-  test_df <- NULL
-} 
+  # Empty table instead of NULL so a first run with no posts yet doesn't crash
+  test_df <- dplyr::tibble(Account = character(), NoBots = logical(), Protected = logical())
+}
 
+# Only look up accounts that haven't been checked before. An account whose
+# lookup failed isn't in test_df, so it gets retried on the next run.
+new_posting_accounts <- setdiff(all_posting_accounts, test_df$Account)
 
 if(length(new_posting_accounts) > 0) {
   new_test_df <- purrr::map(new_posting_accounts, check_account) |>
     bind_rows()
-  test_df <- bind_rows(new_test_df, test_df)
+  # distinct() also clears out duplicate rows piled up by earlier versions of this script
+  test_df <- bind_rows(new_test_df, test_df) |>
+    distinct(Account, .keep_all = TRUE)
   saveRDS(test_df, file.path(working_directory, "test_df.Rds"))
 }
 
@@ -155,8 +149,15 @@ accounts_to_remove <- c(accts_to_remove_manually, accounts_to_remove)
 
 deduped_recent_posts <- all_recent_posts |>
   dplyr::distinct(URI, .keep_all = TRUE) |>
-  dplyr::filter(!(By %in% accounts_to_remove)) |>
-  dplyr::filter(!stringr::str_detect(By, accts_to_remove_regexp))
+  dplyr::filter(!(By %in% accounts_to_remove))
+
+# Combine accts_to_remove_regexp into one pattern, so c("a", "b") drops
+# accounts matching either one. An empty "" skips this filter.
+remove_pattern <- paste(accts_to_remove_regexp[nzchar(accts_to_remove_regexp)], collapse = "|")
+if (nzchar(remove_pattern)) {
+  deduped_recent_posts <- deduped_recent_posts |>
+    dplyr::filter(!stringr::str_detect(By, remove_pattern))
+}
 
 
 
